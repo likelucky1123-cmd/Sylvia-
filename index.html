@@ -17,15 +17,13 @@
   <!-- 引入 FontAwesome 圖示庫 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   
-  <!-- 引入 React 與 Babel 核心 (讓網頁可直接解析 React 語法) -->
+  <!-- 引入 React 與 Babel 核心 -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <!-- 引入 Firebase 核心套件 -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <!-- 引入 LocalForage (本機深度儲存引擎，完美替代 Firebase) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 
   <style>
     /* 防止手機端長按選取文字，讓它更像一個 Native App */
@@ -33,7 +31,7 @@
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
-      overscroll-behavior-y: none; /* 防止 Safari 彈性滾動 */
+      overscroll-behavior-y: none;
     }
     input, textarea {
       -webkit-user-select: auto;
@@ -46,14 +44,13 @@
   </style>
 
   <script>
-    // --- 動態生成 PWA Service Worker 與 Manifest (核心：讓手機認定這是一個 App) ---
+    // 動態生成 PWA Service Worker 與 Manifest
     document.addEventListener("DOMContentLoaded", () => {
-      // 1. 動態建立 App 圖示與 Manifest
       const manifest = {
         name: "莫蘭迪時光手札",
         short_name: "手札",
         start_url: window.location.href,
-        display: "standalone", /* 關鍵設定：隱藏網址列，全螢幕運行 */
+        display: "standalone",
         background_color: "#F4F1EA",
         theme_color: "#F4F1EA",
         icons: [{
@@ -64,28 +61,20 @@
         }]
       };
       const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
-      const manifestUrl = URL.createObjectURL(manifestBlob);
       const link = document.createElement('link');
       link.rel = 'manifest';
-      link.href = manifestUrl;
+      link.href = URL.createObjectURL(manifestBlob);
       document.head.appendChild(link);
 
-      // 動態建立 iOS 桌面圖示
       const appleIcon = document.createElement('link');
       appleIcon.rel = 'apple-touch-icon';
       appleIcon.href = manifest.icons[0].src;
       document.head.appendChild(appleIcon);
 
-      // 2. 註冊基礎 Service Worker (騙過瀏覽器，允許加入主畫面)
       if ('serviceWorker' in navigator) {
-        const swCode = `
-          self.addEventListener('install', e => self.skipWaiting());
-          self.addEventListener('activate', e => e.waitUntil(clients.claim()));
-          self.addEventListener('fetch', e => {}); 
-        `;
+        const swCode = `self.addEventListener('install', e => self.skipWaiting()); self.addEventListener('activate', e => e.waitUntil(clients.claim())); self.addEventListener('fetch', e => {});`;
         const swBlob = new Blob([swCode], {type: 'application/javascript'});
-        const swUrl = URL.createObjectURL(swBlob);
-        navigator.serviceWorker.register(swUrl).catch(err => console.log('SW Registration failed:', err));
+        navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(()=>console.log('SW setup skipped'));
       }
     });
   </script>
@@ -95,15 +84,6 @@
 
   <script type="text/babel">
     const { useState, useEffect, useMemo, useRef } = React;
-
-    // --- Firebase 初始化設定 ---
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { projectId: "demo-project" };
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'morandi-diary-pwa';
 
     // --- 莫蘭迪主題色系 ---
     const theme = {
@@ -116,127 +96,102 @@
       border: 'border-[#E5E0D8]'
     };
 
-    // --- 共用圖示元件 ---
     const Icon = ({ name, className = '', onClick }) => (
       <i className={`fa-solid fa-${name} ${className}`} onClick={onClick}></i>
     );
 
     function App() {
-      const [firebaseUser, setFirebaseUser] = useState(null);
-      const [authLoading, setAuthLoading] = useState(true);
+      const [isLoading, setIsLoading] = useState(true);
       const [isAppUnlocked, setIsAppUnlocked] = useState(false);
+      
+      // 全域資料 (儲存於本機 IndexedDB)
       const [accountData, setAccountData] = useState(null);
-
-      // 全域資料
       const [profile, setProfile] = useState({ username: '', bio: '', avatar: '' });
       const [timeline, setTimeline] = useState([]);
       const [folders, setFolders] = useState([]);
       const [files, setFiles] = useState([]);
 
+      // 初始化載入本機資料
       useEffect(() => {
-        const initAuth = async () => {
+        const loadLocalData = async () => {
           try {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-              await auth.signInWithCustomToken(__initial_auth_token);
-            } else {
-              await auth.signInAnonymously();
-            }
+            const acc = await localforage.getItem('diary_account');
+            setAccountData(acc);
+            
+            const prof = await localforage.getItem('diary_profile') || { username: acc?.username || '新用戶', bio: '寫下一句屬於你的個性文案...', avatar: '' };
+            setProfile(prof);
+            
+            const tl = await localforage.getItem('diary_timeline') || [];
+            setTimeline(tl);
+            
+            const fldrs = await localforage.getItem('diary_folders') || [];
+            setFolders(fldrs);
+            
+            const fls = await localforage.getItem('diary_files') || [];
+            setFiles(fls);
           } catch (error) {
-            console.error("Auth error:", error);
+            console.error("資料載入失敗", error);
+          } finally {
+            setIsLoading(false);
           }
         };
-        initAuth();
-
-        const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
-          setFirebaseUser(currentUser);
-          if (currentUser) {
-            const accRef = db.collection('artifacts').doc(appId).collection('users').doc(currentUser.uid).collection('account').doc('info');
-            const accSnap = await accRef.get();
-            if (accSnap.exists) setAccountData(accSnap.data());
-            else setAccountData(null);
-          }
-          setAuthLoading(false);
-        });
-        return () => unsubscribe();
+        loadLocalData();
       }, []);
 
-      useEffect(() => {
-        if (!firebaseUser || !isAppUnlocked) return;
-        const userId = firebaseUser.uid;
-        
-        const profileRef = db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('profile').doc('main');
-        const timelineRef = db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('timeline');
-        const foldersRef = db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('folders');
-        const filesRef = db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('files');
+      // 儲存資料的通用函式
+      const updateData = async (key, data, setter) => {
+        setter(data);
+        await localforage.setItem(key, data);
+      };
 
-        const unsubProfile = profileRef.onSnapshot((docSnap) => {
-          if (docSnap.exists) setProfile(docSnap.data());
-          else {
-            const defaultProfile = { username: accountData?.username || '新用戶', bio: '寫下一句屬於你的個性文案...', avatar: '' };
-            profileRef.set(defaultProfile);
-            setProfile(defaultProfile);
-          }
-        });
-
-        const unsubTimeline = timelineRef.onSnapshot((snapshot) => {
-          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-          setTimeline(data);
-        });
-
-        const unsubFolders = foldersRef.onSnapshot((snapshot) => {
-          setFolders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
-
-        const unsubFiles = filesRef.onSnapshot((snapshot) => {
-          const fData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          fData.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-          setFiles(fData);
-        });
-
-        return () => { unsubProfile(); unsubTimeline(); unsubFolders(); unsubFiles(); };
-      }, [firebaseUser, isAppUnlocked, accountData]);
-
-      if (authLoading) {
+      if (isLoading) {
         return <div className={`h-full w-full ${theme.bg} flex items-center justify-center`}><Icon name="spinner fa-spin" className="text-3xl text-[#9BA495]" /></div>;
       }
 
       if (!isAppUnlocked) {
-        return <LockScreen userId={firebaseUser?.uid} accountData={accountData} onUnlock={() => setIsAppUnlocked(true)} onRegisterSuccess={(data) => { setAccountData(data); setIsAppUnlocked(true); }} />;
+        return <LockScreen 
+          accountData={accountData} 
+          onUnlock={() => setIsAppUnlocked(true)} 
+          onRegisterSuccess={(data) => { 
+            updateData('diary_account', data, setAccountData); 
+            setIsAppUnlocked(true); 
+          }} 
+        />;
       }
 
-      return <MainApp user={firebaseUser} profile={profile} timeline={timeline} folders={folders} files={files} onLock={() => setIsAppUnlocked(false)} />;
+      return <MainApp 
+        profile={profile} setProfile={(d) => updateData('diary_profile', d, setProfile)}
+        timeline={timeline} setTimeline={(d) => updateData('diary_timeline', d, setTimeline)}
+        folders={folders} setFolders={(d) => updateData('diary_folders', d, setFolders)}
+        files={files} setFiles={(d) => updateData('diary_files', d, setFiles)}
+        onLock={() => setIsAppUnlocked(false)} 
+      />;
     }
 
     // ==========================================
     // 1. 登入鎖定畫面
     // ==========================================
-    function LockScreen({ userId, accountData, onUnlock, onRegisterSuccess }) {
+    function LockScreen({ accountData, onUnlock, onRegisterSuccess }) {
       const isLoginMode = !!accountData; 
       const [username, setUsername] = useState('');
       const [password, setPassword] = useState('');
       const [confirmPassword, setConfirmPassword] = useState('');
       const [error, setError] = useState('');
-      const [loading, setLoading] = useState(false);
 
-      const handleSubmit = async (e) => {
+      const handleSubmit = (e) => {
         e.preventDefault();
         setError('');
-        setLoading(true);
-        try {
-          if (isLoginMode) {
-            if (accountData.username === username && accountData.password === password) onUnlock();
-            else setError('帳號或密碼錯誤，請重新輸入');
+        if (isLoginMode) {
+          if (accountData.username === username && accountData.password === password) {
+            onUnlock();
           } else {
-            if (!username || !password) throw new Error("請填寫完整資訊");
-            if (password !== confirmPassword) throw new Error("兩次輸入的密碼不一致");
-            const accRef = db.collection('artifacts').doc(appId).collection('users').doc(userId).collection('account').doc('info');
-            const newAccData = { username, password, createdAt: Date.now() };
-            await accRef.set(newAccData);
-            onRegisterSuccess(newAccData);
+            setError('帳號或密碼錯誤，請重新輸入');
           }
-        } catch (err) { setError(err.message); } 
-        finally { setLoading(false); }
+        } else {
+          if (!username || !password) return setError("請填寫完整資訊");
+          if (password !== confirmPassword) return setError("兩次輸入的密碼不一致");
+          onRegisterSuccess({ username, password, createdAt: Date.now() });
+        }
       };
 
       return (
@@ -246,8 +201,8 @@
               <div className="w-16 h-16 bg-[#F4F1EA] rounded-full flex items-center justify-center mx-auto mb-4">
                 <Icon name="lock" className="text-3xl text-[#9BA495]" />
               </div>
-              <h1 className={`text-2xl font-bold ${theme.textDark} tracking-wider mb-2`}>{isLoginMode ? '歡迎回到手札' : '建立專屬手札'}</h1>
-              <p className={`${theme.textLight} text-sm`}>{isLoginMode ? '請輸入帳號密碼解鎖' : '設定帳密確保資料隱私'}</p>
+              <h1 className={`text-2xl font-bold ${theme.textDark} tracking-wider mb-2`}>{isLoginMode ? '歡迎回到手札' : '建立本機專屬手札'}</h1>
+              <p className={`${theme.textLight} text-sm`}>{isLoginMode ? '請輸入帳號密碼解鎖' : '資料將安全加密儲存於您的手機中'}</p>
             </div>
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="relative">
@@ -265,8 +220,8 @@
                 </div>
               )}
               {error && <p className="text-[#D1A3A3] text-sm text-center font-medium bg-[#F9ECEC] py-2 rounded-lg">{error}</p>}
-              <button type="submit" disabled={loading} className={`w-full py-4 rounded-2xl ${theme.primary} ${theme.primaryHover} text-white font-bold tracking-wide shadow-md flex justify-center`}>
-                {loading ? <Icon name="spinner fa-spin" /> : (isLoginMode ? '解鎖' : '完成註冊')}
+              <button type="submit" className={`w-full py-4 rounded-2xl ${theme.primary} ${theme.primaryHover} text-white font-bold tracking-wide shadow-md flex justify-center active:scale-[0.98] transition-transform`}>
+                {isLoginMode ? '解鎖' : '完成註冊'}
               </button>
             </form>
           </div>
@@ -277,20 +232,17 @@
     // ==========================================
     // 2. 主框架與導航欄
     // ==========================================
-    function MainApp({ user, profile, timeline, folders, files, onLock }) {
+    function MainApp(props) {
       const [activeTab, setActiveTab] = useState('timeline');
 
       return (
         <div className={`h-full w-full flex flex-col ${theme.bg}`}>
-          {/* 內容區塊 - 設定 padding bottom 避免被導航欄遮擋，設定 safe-area 適應瀏海屏 */}
           <div className="flex-1 overflow-y-auto pb-24 pt-safe">
-            {activeTab === 'timeline' && <TimelineTab user={user} timeline={timeline} />}
-            {activeTab === 'database' && <DatabaseTab user={user} folders={folders} files={files} />}
-            {activeTab === 'search' && <SearchTab timeline={timeline} files={files} />}
-            {activeTab === 'profile' && <ProfileTab user={user} profile={profile} onLock={onLock} />}
+            {activeTab === 'timeline' && <TimelineTab {...props} />}
+            {activeTab === 'database' && <DatabaseTab {...props} />}
+            {activeTab === 'search' && <SearchTab timeline={props.timeline} files={props.files} />}
+            {activeTab === 'profile' && <ProfileTab {...props} />}
           </div>
-
-          {/* 底部導航 - 加入 padding-bottom: env(safe-area-inset-bottom) 以適應 iPhone 底部橫條 */}
           <div className={`fixed bottom-0 left-0 right-0 ${theme.surface} border-t ${theme.border} px-6 py-3 flex justify-between items-center shadow-[0_-4px_20px_rgba(0,0,0,0.02)] z-40 pb-[max(0.75rem,env(safe-area-inset-bottom))]`}>
             <NavButton icon="clock" label="時光" active={activeTab === 'timeline'} onClick={() => setActiveTab('timeline')} />
             <NavButton icon="folder" label="資料庫" active={activeTab === 'database'} onClick={() => setActiveTab('database')} />
@@ -313,9 +265,8 @@
     // ==========================================
     // 3. 時光軌跡
     // ==========================================
-    function TimelineTab({ user, timeline }) {
+    function TimelineTab({ timeline, setTimeline }) {
       const [isModalOpen, setIsModalOpen] = useState(false);
-      const [loading, setLoading] = useState(false);
       const [editEventId, setEditEventId] = useState(null);
       const [eventData, setEventData] = useState({ title: '', date: '', location: '', text: '', mood: '平靜' });
       const [actionMenuEvent, setActionMenuEvent] = useState(null);
@@ -324,24 +275,27 @@
       const openAddModal = () => { setEventData({ title: '', date: '', location: '', text: '', mood: '平靜' }); setEditEventId(null); setErrorMsg(''); setIsModalOpen(true); };
       const openEditModal = (event) => { setEventData({ title: event.title, date: event.date, location: event.location, text: event.text, mood: event.mood }); setEditEventId(event.id); setActionMenuEvent(null); setErrorMsg(''); setIsModalOpen(true); };
 
-      const handleSaveEvent = async () => {
+      const handleSaveEvent = () => {
         if (!eventData.title || !eventData.date) return setErrorMsg("請填寫完整的事件名稱與時間");
-        setLoading(true);
-        try {
-          const colRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('timeline');
-          if (editEventId) await colRef.doc(editEventId).update(eventData);
-          else await colRef.add({ ...eventData, timestamp: Date.now() });
-          setIsModalOpen(false); 
-        } catch (e) { setErrorMsg("儲存發生錯誤"); } 
-        finally { setLoading(false); }
+        const newEvent = { ...eventData, id: editEventId || Date.now().toString(), timestamp: Date.now() };
+        
+        let newTimeline;
+        if (editEventId) {
+          newTimeline = timeline.map(e => e.id === editEventId ? newEvent : e);
+        } else {
+          newTimeline = [newEvent, ...timeline];
+        }
+        
+        // 排序：最新的日期在前面
+        newTimeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setTimeline(newTimeline);
+        setIsModalOpen(false); 
       };
 
-      const handleDeleteEvent = async (id) => {
+      const handleDeleteEvent = (id) => {
         if (!window.confirm("確定要刪除這筆紀錄嗎？")) return;
-        try {
-          await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('timeline').doc(id).delete();
-          setActionMenuEvent(null);
-        } catch (e) {}
+        setTimeline(timeline.filter(e => e.id !== id));
+        setActionMenuEvent(null);
       };
 
       return (
@@ -407,7 +361,7 @@
                 {errorMsg && <p className="text-[#D1A3A3] text-sm text-center">{errorMsg}</p>}
                 <div className="flex space-x-3 pt-3">
                   <button onClick={() => setIsModalOpen(false)} className="flex-1 py-3.5 rounded-2xl bg-[#EBEBEB] text-[#7C7C7C] font-medium text-sm">取消</button>
-                  <button onClick={handleSaveEvent} className={`flex-1 py-3.5 rounded-2xl ${theme.primary} text-white font-medium text-sm`}>{loading ? <Icon name="spinner fa-spin"/> : '儲存'}</button>
+                  <button onClick={handleSaveEvent} className={`flex-1 py-3.5 rounded-2xl ${theme.primary} text-white font-medium text-sm active:scale-95`}>儲存</button>
                 </div>
               </div>
             </div>
@@ -417,21 +371,15 @@
     }
 
     // ==========================================
-    // 4. 資料庫 (含切片上傳)
+    // 4. 資料庫 (本機高速版)
     // ==========================================
-    const CHUNK_SIZE = 700000;
-    function DatabaseTab({ user, folders, files }) {
+    function DatabaseTab({ folders, setFolders, files, setFiles }) {
       const [currentFolder, setCurrentFolder] = useState(null);
       const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
       const [uploadError, setUploadError] = useState('');
       const [previewFile, setPreviewFile] = useState(null);
-      const [fullDataUrl, setFullDataUrl] = useState('');
-      const [isPreviewLoading, setIsPreviewLoading] = useState(false);
       const [actionMenuFile, setActionMenuFile] = useState(null);
-      
       const [uploadData, setUploadData] = useState({ folderId: '', newFolderName: '', name: '', note: '', dataUrl: '', type: '', size: 0 });
-      const [isUploading, setIsUploading] = useState(false);
-      const [uploadProgress, setUploadProgress] = useState(0);
 
       const handleFileChange = (e) => {
         const file = e.target.files[0];
@@ -444,59 +392,55 @@
         reader.readAsDataURL(file); 
       };
 
-      const handleUploadSubmit = async () => {
+      const handleUploadSubmit = () => {
         if (!uploadData.dataUrl && uploadData.type !== 'text') return setUploadError("請選擇檔案");
         if (!uploadData.folderId && !uploadData.newFolderName) return setUploadError("請選擇資料夾");
         if (!uploadData.name) return setUploadError("請填寫檔案名稱");
 
-        setIsUploading(true);
-        try {
-          let targetFolderId = uploadData.folderId;
-          if (!targetFolderId) {
-            const folderRef = await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('folders').add({ name: uploadData.newFolderName, createdAt: Date.now() });
-            targetFolderId = folderRef.id;
-          }
+        let targetFolderId = uploadData.folderId;
+        
+        // 如果是新資料夾
+        if (!targetFolderId) {
+          targetFolderId = 'folder_' + Date.now();
+          setFolders([...folders, { id: targetFolderId, name: uploadData.newFolderName, createdAt: Date.now() }]);
+        }
 
-          const base64Str = uploadData.dataUrl;
-          const totalChunks = Math.ceil(base64Str.length / CHUNK_SIZE);
-          
-          const fileRef = await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('files').add({
-            folderId: targetFolderId, name: uploadData.name, type: uploadData.type, note: uploadData.note, size: uploadData.size, chunksCount: totalChunks, createdAt: Date.now()
-          });
+        // 直接存入本機，無需切片
+        const newFile = {
+          id: 'file_' + Date.now(),
+          folderId: targetFolderId,
+          name: uploadData.name,
+          type: uploadData.type,
+          note: uploadData.note,
+          size: uploadData.size,
+          dataUrl: uploadData.dataUrl,
+          createdAt: Date.now()
+        };
 
-          for (let i = 0; i < totalChunks; i++) {
-            await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('files').doc(fileRef.id).collection('chunks').doc(i.toString()).set({ data: base64Str.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE) });
-            setUploadProgress(10 + Math.floor(((i + 1) / totalChunks) * 90));
-          }
-          setIsUploadModalOpen(false);
-        } catch (error) { setUploadError("上傳失敗"); } 
-        finally { setIsUploading(false); setUploadProgress(0); }
+        const newFiles = [newFile, ...files];
+        setFiles(newFiles);
+        setIsUploadModalOpen(false);
       };
 
-      const loadFullFile = async (file, action) => {
-        setIsPreviewLoading(true); setActionMenuFile(null);
-        try {
-          let combinedData = '';
-          for (let i = 0; i < file.chunksCount; i++) {
-            const chunkSnap = await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('files').doc(file.id).collection('chunks').doc(i.toString()).get();
-            if (chunkSnap.exists) combinedData += chunkSnap.data().data;
-          }
-          if (action === 'download') {
-            const link = document.createElement('a');
-            link.href = file.type === 'text' ? `data:text/plain;charset=utf-8,${encodeURIComponent(combinedData)}` : combinedData;
-            link.download = file.name;
-            link.click();
-          } else {
-            setFullDataUrl(combinedData); setPreviewFile(file);
-          }
-        } catch (e) { alert("讀取失敗"); } 
-        finally { setIsPreviewLoading(false); }
-      };
-
-      const handleDelete = async (file) => {
-        if (!window.confirm("確定刪除檔案？")) return;
-        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('files').doc(file.id).delete();
+      const handleDownload = (file) => {
+        const link = document.createElement('a');
+        link.href = file.type === 'text' ? `data:text/plain;charset=utf-8,${encodeURIComponent(file.dataUrl)}` : file.dataUrl;
+        link.download = file.name;
+        link.click();
         setActionMenuFile(null);
+      };
+
+      const handleDelete = (file) => {
+        if (!window.confirm("確定刪除檔案？")) return;
+        setFiles(files.filter(f => f.id !== file.id));
+        setActionMenuFile(null);
+      };
+
+      const handleDeleteFolder = (folderId) => {
+        if (!window.confirm("確定刪除資料夾及裡面所有檔案嗎？")) return;
+        setFolders(folders.filter(f => f.id !== folderId));
+        setFiles(files.filter(f => f.folderId !== folderId));
+        setCurrentFolder(null);
       };
 
       const currentFiles = files.filter(f => f.folderId === currentFolder?.id);
@@ -506,19 +450,15 @@
           <div className="flex justify-between items-center mb-6 pt-4 px-2">
             <div className="flex items-center space-x-3">
               {currentFolder && <button onClick={() => setCurrentFolder(null)} className="p-2"><Icon name="arrow-left" className="text-xl" /></button>}
-              <h2 className={`text-2xl font-bold ${theme.textDark}`}>{currentFolder ? currentFolder.name : '資料庫'}</h2>
+              <h2 className={`text-2xl font-bold ${theme.textDark} truncate max-w-[180px]`}>{currentFolder ? currentFolder.name : '資料庫'}</h2>
             </div>
-            <button onClick={() => { setUploadData({ folderId: currentFolder?.id || '', newFolderName: '', name: '', note: '', dataUrl: '', type: '', size: 0 }); setIsUploadModalOpen(true); }} className={`w-10 h-10 rounded-full ${theme.primary} text-white shadow-md flex justify-center items-center`}><Icon name="plus" /></button>
+            <div className="flex space-x-2">
+              {currentFolder && <button onClick={() => handleDeleteFolder(currentFolder.id)} className="w-10 h-10 rounded-full bg-red-50 text-red-400 flex justify-center items-center"><Icon name="trash" /></button>}
+              <button onClick={() => { setUploadData({ folderId: currentFolder?.id || '', newFolderName: '', name: '', note: '', dataUrl: '', type: '', size: 0 }); setIsUploadModalOpen(true); }} className={`w-10 h-10 rounded-full ${theme.primary} text-white shadow-md flex justify-center items-center`}><Icon name="plus" /></button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto pb-6">
-            {isPreviewLoading && (
-              <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex flex-col items-center justify-center z-50">
-                <Icon name="spinner fa-spin" className="text-4xl text-[#9BA495] mb-4" />
-                <p className="text-sm font-bold text-[#7C7C7C] tracking-widest">無損讀取中...</p>
-              </div>
-            )}
-
             {!currentFolder ? (
               <div className="grid grid-cols-2 gap-4 px-2">
                 {folders.length === 0 && <div className="col-span-2 text-center text-[#AFAFAF] mt-10">尚無資料夾</div>}
@@ -534,7 +474,7 @@
                 {currentFiles.length === 0 && <div className="text-center text-[#AFAFAF] mt-10">空的</div>}
                 {currentFiles.map(file => (
                   <div key={file.id} className={`${theme.surface} p-3 rounded-2xl shadow-sm border ${theme.border} flex items-center justify-between`}>
-                    <div className="flex items-center space-x-3 flex-1 overflow-hidden" onClick={() => loadFullFile(file, 'preview')}>
+                    <div className="flex items-center space-x-3 flex-1 overflow-hidden" onClick={() => setPreviewFile(file)}>
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${theme.bg}`}>
                         <Icon name={file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'music' : 'file-lines'} className="text-[#A0A0A0] text-lg" />
                       </div>
@@ -553,15 +493,8 @@
           {/* 上傳彈窗 */}
           {isUploadModalOpen && (
             <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-[100] pb-0 sm:p-4">
-              <div className={`${theme.surface} w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-xl space-y-4 animate-slide-up relative pb-8`}>
-                {isUploading && (
-                  <div className="absolute inset-0 bg-white/90 z-10 flex flex-col items-center justify-center rounded-t-3xl sm:rounded-3xl">
-                    <Icon name="spinner fa-spin" className="text-4xl text-[#9BA495] mb-4" />
-                    <p className="font-bold text-[#5C5C5C] text-sm">無損加密上傳中...</p>
-                    <div className="w-2/3 h-1.5 bg-[#F4F1EA] rounded-full mt-3 overflow-hidden"><div className={`h-full ${theme.primary} transition-all`} style={{width: `${uploadProgress}%`}}></div></div>
-                  </div>
-                )}
-                <h3 className={`text-lg font-bold ${theme.textDark}`}>上傳檔案</h3>
+              <div className={`${theme.surface} w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-xl space-y-4 animate-slide-up pb-8`}>
+                <h3 className={`text-lg font-bold ${theme.textDark}`}>加入本機資料庫</h3>
                 <div className="space-y-2">
                   <select className={`w-full p-3 rounded-xl bg-white border ${theme.border} text-sm`} value={uploadData.folderId} onChange={e => setUploadData({...uploadData, folderId: e.target.value, newFolderName: ''})}>
                     <option value="">-- 建立新資料夾 --</option>
@@ -579,7 +512,7 @@
                 {uploadError && <p className="text-red-400 text-xs text-center">{uploadError}</p>}
                 <div className="flex space-x-3 pt-2">
                   <button onClick={() => setIsUploadModalOpen(false)} className="flex-1 py-3 rounded-xl bg-[#EBEBEB] text-sm font-bold text-[#7C7C7C]">取消</button>
-                  <button onClick={handleUploadSubmit} className={`flex-1 py-3 rounded-xl ${theme.primary} text-white text-sm font-bold`}>上傳</button>
+                  <button onClick={handleUploadSubmit} className={`flex-1 py-3 rounded-xl ${theme.primary} text-white text-sm font-bold active:scale-95`}>儲存</button>
                 </div>
               </div>
             </div>
@@ -590,7 +523,7 @@
             <div className="fixed inset-0 bg-black/20 flex items-end sm:items-center justify-center z-[150] pb-6 sm:p-0" onClick={() => setActionMenuFile(null)}>
               <div className={`${theme.surface} w-[90%] sm:w-80 rounded-3xl p-4 shadow-xl flex flex-col space-y-2`} onClick={e => e.stopPropagation()}>
                 <div className="pb-3 border-b border-[#E5E0D8] px-2"><h4 className="font-bold text-sm text-[#5C5C5C] truncate">{actionMenuFile.name}</h4></div>
-                <button onClick={() => loadFullFile(actionMenuFile, 'download')} className="flex items-center space-x-3 p-3 rounded-xl active:bg-[#F4F1EA] text-[#5C5C5C] text-sm"><Icon name="download" className="text-[#9BA495] w-5 text-center" /> <span>下載原始檔</span></button>
+                <button onClick={() => handleDownload(actionMenuFile)} className="flex items-center space-x-3 p-3 rounded-xl active:bg-[#F4F1EA] text-[#5C5C5C] text-sm"><Icon name="download" className="text-[#9BA495] w-5 text-center" /> <span>下載原始檔</span></button>
                 <button onClick={() => handleDelete(actionMenuFile)} className="flex items-center space-x-3 p-3 rounded-xl active:bg-red-50 text-red-500 text-sm"><Icon name="trash" className="w-5 text-center" /> <span>永久刪除</span></button>
               </div>
             </div>
@@ -600,15 +533,15 @@
           {previewFile && (
             <div className="fixed inset-0 bg-black/95 flex flex-col z-[300]">
               <div className="flex justify-between items-center p-4 text-white bg-gradient-to-b from-black/60 pt-[max(1rem,env(safe-area-inset-top))]">
-                <button onClick={() => { setPreviewFile(null); setFullDataUrl(''); }} className="p-2"><Icon name="arrow-left" className="text-xl" /></button>
+                <button onClick={() => setPreviewFile(null)} className="p-2"><Icon name="arrow-left" className="text-xl" /></button>
                 <span className="font-medium text-sm truncate max-w-[60%]">{previewFile.name}</span>
-                <button onClick={() => loadFullFile(previewFile, 'download')} className="p-2"><Icon name="download" className="text-lg" /></button>
+                <button onClick={() => handleDownload(previewFile)} className="p-2"><Icon name="download" className="text-lg" /></button>
               </div>
               <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
-                {previewFile.type.startsWith('image/') && <img src={fullDataUrl} className="max-w-full max-h-full object-contain" />}
-                {previewFile.type.startsWith('video/') && <video src={fullDataUrl} controls autoPlay className="max-w-full max-h-full" />}
-                {previewFile.type.startsWith('audio/') && <div className="bg-[#2A2A2A] p-8 rounded-3xl"><Icon name="music" className="text-5xl text-white mb-6 block text-center opacity-80" /><audio src={fullDataUrl} controls autoPlay /></div>}
-                {previewFile.type === 'text' && <div className="bg-white p-6 rounded-xl w-full max-w-lg min-h-[50%] overflow-y-auto whitespace-pre-wrap text-[#4A4A4A] text-sm">{fullDataUrl}</div>}
+                {previewFile.type.startsWith('image/') && <img src={previewFile.dataUrl} className="max-w-full max-h-full object-contain" />}
+                {previewFile.type.startsWith('video/') && <video src={previewFile.dataUrl} controls autoPlay className="max-w-full max-h-full" />}
+                {previewFile.type.startsWith('audio/') && <div className="bg-[#2A2A2A] p-8 rounded-3xl"><Icon name="music" className="text-5xl text-white mb-6 block text-center opacity-80" /><audio src={previewFile.dataUrl} controls autoPlay /></div>}
+                {previewFile.type === 'text' && <div className="bg-white p-6 rounded-xl w-full max-w-lg min-h-[50%] overflow-y-auto whitespace-pre-wrap text-[#4A4A4A] text-sm">{previewFile.dataUrl}</div>}
               </div>
             </div>
           )}
@@ -660,9 +593,9 @@
     }
 
     // ==========================================
-    // 6. 個人頁面 (包含 Canvas 壓縮與 PWA 安裝教學)
+    // 6. 個人頁面
     // ==========================================
-    function ProfileTab({ user, profile, onLock }) {
+    function ProfileTab({ profile, setProfile, onLock }) {
       const [isEditing, setIsEditing] = useState(false);
       const [editForm, setEditForm] = useState(profile);
       const [showPwaGuide, setShowPwaGuide] = useState(false);
@@ -691,9 +624,8 @@
         reader.readAsDataURL(file);
       };
 
-      const handleSave = async () => {
-        const profileRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('profile').doc('main');
-        await profileRef.set(editForm);
+      const handleSave = () => {
+        setProfile(editForm);
         setIsEditing(false);
       };
 
@@ -719,13 +651,17 @@
             </div>
           ) : (
             <div className="text-center w-full max-w-sm px-4">
-              <h2 className={`text-xl font-bold ${theme.textDark} mb-2`}>{profile.username || '新用戶'}</h2>
-              <p className="text-[#8C8C8C] text-sm leading-relaxed whitespace-pre-wrap">{profile.bio || '寫下個性文案...'}</p>
+              <h2 className={`text-xl font-bold ${theme.textDark} mb-2`}>{profile.username}</h2>
+              <p className="text-[#8C8C8C] text-sm leading-relaxed whitespace-pre-wrap">{profile.bio}</p>
             </div>
           )}
 
           {!isEditing && (
             <div className="w-full max-w-sm mt-10 space-y-3 px-4">
+              <div className="flex items-center justify-center space-x-2 text-xs text-[#9BA495] bg-[#E8F1ED] py-2 rounded-lg mb-4">
+                <Icon name="shield-check" /> <span>本機隱私模式啟用中，資料安全不外洩</span>
+              </div>
+
               <button onClick={() => setShowPwaGuide(true)} className={`${theme.surface} w-full rounded-2xl border ${theme.border} p-4 flex items-center justify-between active:bg-[#F4F1EA]`}>
                 <div className="flex items-center space-x-3 text-[#5C5C5C] font-bold text-sm"><div className="p-2 bg-[#E8F1ED] rounded-xl"><Icon name="mobile-screen" className="text-[#9BA495]" /></div><span>安裝 App 至主畫面</span></div>
                 <span className="text-[10px] bg-[#F4F1EA] px-2 py-1 rounded">推薦</span>
@@ -770,4 +706,5 @@
   </script>
 </body>
 </html>
+
 
