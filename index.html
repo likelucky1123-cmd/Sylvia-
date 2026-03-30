@@ -5,28 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>莫蘭迪手札</title>
   
-  <!-- iOS 與 Android 桌面應用程式 (PWA) 核心標籤 -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="手札">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#F4F1EA">
   
-  <!-- 引入 Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- 引入 FontAwesome 圖示庫 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  
-  <!-- 引入 React 與 Babel 核心 -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- 引入 LocalForage (本機深度儲存引擎) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 
   <style>
-    /* 防止手機端長按選取文字，讓它更像一個 Native App */
     body {
       -webkit-touch-callout: none;
       -webkit-user-select: none;
@@ -37,74 +29,84 @@
       -webkit-user-select: auto;
       user-select: auto;
     }
-    .animate-fade-in { animation: fadeIn 0.4s ease-out; }
-    .animate-slide-up { animation: slideUp 0.3s ease-out; }
+    .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+    .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
+    .animate-toast { animation: toastInOut 3s ease-in-out forwards; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes toastInOut { 0% { transform: translate(-50%, 20px); opacity: 0; } 10% { transform: translate(-50%, 0); opacity: 1; } 90% { transform: translate(-50%, 0); opacity: 1; } 100% { transform: translate(-50%, -20px); opacity: 0; } }
     
-    /* 🍏 專為 iPhone 瀏海與動態島設計的「安全區域」推移距離 */
-    /* 加上 !important 確保絕對優先，不會被其他間距設定覆蓋 */
     .safe-pt { padding-top: max(1.5rem, env(safe-area-inset-top)) !important; }
-    .safe-pb { padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important; }
   </style>
 
   <script>
-    // 動態生成 PWA Service Worker 與 Manifest
     document.addEventListener("DOMContentLoaded", () => {
+      
+      // ========== 桌面 App 圖標設定 ==========
       const manifest = {
-        name: "莫蘭迪時光手札",
-        short_name: "手札",
-        start_url: window.location.href,
+        name: "小耳機素材庫", 
+        short_name: "小耳機", 
+        start_url: window.location.href, 
         display: "standalone",
-        background_color: "#F4F1EA",
+        background_color: "#F4F1EA", 
         theme_color: "#F4F1EA",
         icons: [{
-          src: "IMG_2476.png",
+          src: "IMG_2476.png",   // <--- 可以在這裡換成您的圖片名稱！
           sizes: "192x192",
           type: "image/png",
           purpose: "any maskable"
         }]
       };
+      // =======================================
+
       const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
-      const link = document.createElement('link');
-      link.rel = 'manifest';
-      link.href = URL.createObjectURL(manifestBlob);
-      document.head.appendChild(link);
-
-      const appleIcon = document.createElement('link');
-      appleIcon.rel = 'apple-touch-icon';
-      appleIcon.href = manifest.icons[0].src;
-      document.head.appendChild(appleIcon);
-
+      const link = document.createElement('link'); link.rel = 'manifest'; link.href = URL.createObjectURL(manifestBlob); document.head.appendChild(link);
+      const appleIcon = document.createElement('link'); appleIcon.rel = 'apple-touch-icon'; appleIcon.href = manifest.icons[0].src; document.head.appendChild(appleIcon);
       if ('serviceWorker' in navigator) {
         const swCode = `self.addEventListener('install', e => self.skipWaiting()); self.addEventListener('activate', e => e.waitUntil(clients.claim())); self.addEventListener('fetch', e => {});`;
-        const swBlob = new Blob([swCode], {type: 'application/javascript'});
-        navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(()=>console.log('SW setup skipped'));
+        const swBlob = new Blob([swCode], {type: 'application/javascript'}); navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(()=>console.log('SW setup skipped'));
       }
     });
   </script>
 </head>
-<!-- 使用 h-[100dvh] 確保完美貼合手機實際螢幕高度 -->
 <body class="bg-[#F4F1EA] text-gray-800 antialiased h-[100dvh] w-screen overflow-hidden">
   <div id="root" class="h-full w-full"></div>
 
   <script type="text/babel">
     const { useState, useEffect, useMemo, useRef } = React;
 
-    // --- 莫蘭迪主題色系 ---
     const theme = {
-      bg: 'bg-[#F4F1EA]',
-      surface: 'bg-[#FCFAF8]',
-      primary: 'bg-[#9BA495]',
-      primaryHover: 'hover:bg-[#8A9484]',
-      textDark: 'text-[#5C5C5C]',
-      textLight: 'text-[#8C8C8C]',
-      border: 'border-[#E5E0D8]'
+      bg: 'bg-[#F4F1EA]', surface: 'bg-[#FCFAF8]', primary: 'bg-[#9BA495]', primaryHover: 'hover:bg-[#8A9484]',
+      textDark: 'text-[#5C5C5C]', textLight: 'text-[#8C8C8C]', border: 'border-[#E5E0D8]'
     };
 
-    const Icon = ({ name, className = '', onClick }) => (
-      <i className={`fa-solid fa-${name} ${className}`} onClick={onClick}></i>
-    );
+    const Icon = ({ name, className = '', onClick }) => <i className={`fa-solid fa-${name} ${className}`} onClick={onClick}></i>;
+
+    function ConfirmDialog({ isOpen, message, onConfirm, onCancel }) {
+      if (!isOpen) return null;
+      return (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[500] p-4">
+          <div className={`${theme.surface} w-full max-w-xs rounded-3xl p-6 shadow-xl animate-fade-in`}>
+            <h3 className={`text-[15px] font-bold ${theme.textDark} mb-6 text-center leading-relaxed`}>{message}</h3>
+            <div className="flex space-x-3">
+              <button onClick={onCancel} className="flex-1 py-3 rounded-xl bg-[#EBEBEB] text-[#7C7C7C] font-bold text-sm">取消</button>
+              <button onClick={() => { onConfirm(); onCancel(); }} className={`flex-1 py-3 rounded-xl ${theme.primary} text-white font-bold text-sm active:scale-95`}>確定</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function Toast({ message, onClose }) {
+      if (!message) return null;
+      return (
+        <div className="fixed top-12 left-1/2 z-[600] animate-toast">
+          <div className="bg-[#5C5C5C] text-white px-5 py-3 rounded-full shadow-lg text-sm flex items-center space-x-2">
+            <Icon name="circle-info" /><span>{message}</span>
+          </div>
+        </div>
+      );
+    }
 
     function App() {
       const [isLoading, setIsLoading] = useState(true);
@@ -115,65 +117,51 @@
       const [timeline, setTimeline] = useState([]);
       const [folders, setFolders] = useState([]);
       const [files, setFiles] = useState([]);
+      
+      const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, message: '', onConfirm: () => {} });
+      const [toastMsg, setToastMsg] = useState('');
+
+      const showConfirm = (message, onConfirm) => setConfirmConfig({ isOpen: true, message, onConfirm });
+      const closeConfirm = () => setConfirmConfig({ ...confirmConfig, isOpen: false });
+      const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 3000); };
 
       useEffect(() => {
         const loadLocalData = async () => {
           try {
-            const acc = await localforage.getItem('diary_account');
-            setAccountData(acc);
-            
-            const prof = await localforage.getItem('diary_profile') || { username: acc?.username || '新用戶', bio: '寫下一句屬於你的個性文案...', avatar: '' };
-            setProfile(prof);
-            
-            const tl = await localforage.getItem('diary_timeline') || [];
-            setTimeline(tl);
-            
-            const fldrs = await localforage.getItem('diary_folders') || [];
-            setFolders(fldrs);
-            
-            const fls = await localforage.getItem('diary_files') || [];
-            setFiles(fls);
-          } catch (error) {
-            console.error("資料載入失敗", error);
-          } finally {
-            setIsLoading(false);
-          }
+            const acc = await localforage.getItem('diary_account'); setAccountData(acc);
+            const prof = await localforage.getItem('diary_profile') || { username: acc?.username || '新用戶', bio: '寫下一句屬於你的個性文案...', avatar: '' }; setProfile(prof);
+            const tl = await localforage.getItem('diary_timeline') || []; setTimeline(tl);
+            const fldrs = await localforage.getItem('diary_folders') || []; setFolders(fldrs);
+            const fls = await localforage.getItem('diary_files') || []; setFiles(fls);
+          } catch (error) { console.error("資料載入失敗", error); } finally { setIsLoading(false); }
         };
         loadLocalData();
       }, []);
 
-      const updateData = async (key, data, setter) => {
-        setter(data);
-        await localforage.setItem(key, data);
-      };
+      const updateData = async (key, data, setter) => { setter(data); await localforage.setItem(key, data); };
 
-      if (isLoading) {
-        return <div className={`h-full w-full ${theme.bg} flex items-center justify-center`}><Icon name="spinner fa-spin" className="text-3xl text-[#9BA495]" /></div>;
-      }
+      if (isLoading) return <div className={`h-full w-full ${theme.bg} flex items-center justify-center`}><Icon name="spinner fa-spin" className="text-3xl text-[#9BA495]" /></div>;
 
       if (!isAppUnlocked) {
-        return <LockScreen 
-          accountData={accountData} 
-          onUnlock={() => setIsAppUnlocked(true)} 
-          onRegisterSuccess={(data) => { 
-            updateData('diary_account', data, setAccountData); 
-            setIsAppUnlocked(true); 
-          }} 
-        />;
+        return <LockScreen accountData={accountData} onUnlock={() => setIsAppUnlocked(true)} onRegisterSuccess={(data) => { updateData('diary_account', data, setAccountData); setIsAppUnlocked(true); }} />;
       }
 
-      return <MainApp 
-        profile={profile} setProfile={(d) => updateData('diary_profile', d, setProfile)}
-        timeline={timeline} setTimeline={(d) => updateData('diary_timeline', d, setTimeline)}
-        folders={folders} setFolders={(d) => updateData('diary_folders', d, setFolders)}
-        files={files} setFiles={(d) => updateData('diary_files', d, setFiles)}
-        onLock={() => setIsAppUnlocked(false)} 
-      />;
+      return (
+        <>
+          <MainApp 
+            profile={profile} setProfile={(d) => updateData('diary_profile', d, setProfile)}
+            timeline={timeline} setTimeline={(d) => updateData('diary_timeline', d, setTimeline)}
+            folders={folders} setFolders={(d) => updateData('diary_folders', d, setFolders)}
+            files={files} setFiles={(d) => updateData('diary_files', d, setFiles)}
+            onLock={() => setIsAppUnlocked(false)} 
+            showConfirm={showConfirm} showToast={showToast}
+          />
+          <ConfirmDialog {...confirmConfig} onCancel={closeConfirm} />
+          <Toast message={toastMsg} onClose={() => setToastMsg('')} />
+        </>
+      );
     }
 
-    // ==========================================
-    // 1. 登入鎖定畫面
-    // ==========================================
     function LockScreen({ accountData, onUnlock, onRegisterSuccess }) {
       const isLoginMode = !!accountData; 
       const [username, setUsername] = useState('');
@@ -182,14 +170,10 @@
       const [error, setError] = useState('');
 
       const handleSubmit = (e) => {
-        e.preventDefault();
-        setError('');
+        e.preventDefault(); setError('');
         if (isLoginMode) {
-          if (accountData.username === username && accountData.password === password) {
-            onUnlock();
-          } else {
-            setError('帳號或密碼錯誤，請重新輸入');
-          }
+          if (accountData.username === username && accountData.password === password) onUnlock();
+          else setError('帳號或密碼錯誤，請重新輸入');
         } else {
           if (!username || !password) return setError("請填寫完整資訊");
           if (password !== confirmPassword) return setError("兩次輸入的密碼不一致");
@@ -232,27 +216,25 @@
       );
     }
 
-    // ==========================================
-    // 2. 主框架與導航欄
-    // ==========================================
     function MainApp(props) {
-      const [activeTab, setActiveTab] = useState('timeline');
+      const [activeTab, setActiveTab] = useState('profile');
 
       return (
         <div className={`h-full w-full flex flex-col ${theme.bg}`}>
-          {/* 內容區域的滾動層 */}
-          <div className="flex-1 overflow-y-auto pb-24">
+          <div className="flex-1 overflow-y-auto pb-28">
             {activeTab === 'timeline' && <TimelineTab {...props} />}
             {activeTab === 'database' && <DatabaseTab {...props} />}
             {activeTab === 'search' && <SearchTab timeline={props.timeline} files={props.files} />}
             {activeTab === 'profile' && <ProfileTab {...props} />}
           </div>
-          {/* 底部導航列 */}
-          <div className={`fixed bottom-0 left-0 right-0 ${theme.surface} border-t ${theme.border} px-6 pt-3 shadow-[0_-4px_20px_rgba(0,0,0,0.02)] z-40 safe-pb flex justify-between items-center`}>
-            <NavButton icon="clock" label="時光" active={activeTab === 'timeline'} onClick={() => setActiveTab('timeline')} />
-            <NavButton icon="folder" label="資料庫" active={activeTab === 'database'} onClick={() => setActiveTab('database')} />
-            <NavButton icon="magnifying-glass" label="搜索" active={activeTab === 'search'} onClick={() => setActiveTab('search')} />
-            <NavButton icon="circle-user" label="我的" active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
+          
+          <div className={`fixed bottom-0 left-0 w-full ${theme.surface} border-t ${theme.border} shadow-[0_-4px_20px_rgba(0,0,0,0.02)] z-40`} style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+            <div className="flex justify-between items-center px-8 h-[60px]">
+              <NavButton icon="clock" label="時光" active={activeTab === 'timeline'} onClick={() => setActiveTab('timeline')} />
+              <NavButton icon="folder" label="資料庫" active={activeTab === 'database'} onClick={() => setActiveTab('database')} />
+              <NavButton icon="magnifying-glass" label="搜索" active={activeTab === 'search'} onClick={() => setActiveTab('search')} />
+              <NavButton icon="circle-user" label="我的" active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
+            </div>
           </div>
         </div>
       );
@@ -267,10 +249,7 @@
       );
     }
 
-    // ==========================================
-    // 3. 時光軌跡
-    // ==========================================
-    function TimelineTab({ timeline, setTimeline }) {
+    function TimelineTab({ timeline, setTimeline, showConfirm }) {
       const [isModalOpen, setIsModalOpen] = useState(false);
       const [editEventId, setEditEventId] = useState(null);
       const [eventData, setEventData] = useState({ title: '', date: '', location: '', text: '', mood: '平靜' });
@@ -283,18 +262,16 @@
       const handleSaveEvent = () => {
         if (!eventData.title || !eventData.date) return setErrorMsg("請填寫完整的事件名稱與時間");
         const newEvent = { ...eventData, id: editEventId || Date.now().toString(), timestamp: Date.now() };
-        let newTimeline;
-        if (editEventId) newTimeline = timeline.map(e => e.id === editEventId ? newEvent : e);
-        else newTimeline = [newEvent, ...timeline];
+        let newTimeline = editEventId ? timeline.map(e => e.id === editEventId ? newEvent : e) : [newEvent, ...timeline];
         newTimeline.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setTimeline(newTimeline);
-        setIsModalOpen(false); 
+        setTimeline(newTimeline); setIsModalOpen(false); 
       };
 
-      const handleDeleteEvent = (id) => {
-        if (!window.confirm("確定要刪除這筆紀錄嗎？")) return;
-        setTimeline(timeline.filter(e => e.id !== id));
-        setActionMenuEvent(null);
+      const handleDeleteClick = (id) => {
+        showConfirm("確定要刪除這筆時光紀錄嗎？刪除後無法復原。", () => {
+          setTimeline(timeline.filter(e => e.id !== id));
+          setActionMenuEvent(null);
+        });
       };
 
       return (
@@ -334,7 +311,7 @@
               <div className={`${theme.surface} w-64 rounded-3xl p-3 shadow-xl flex flex-col`} onClick={e => e.stopPropagation()}>
                 <div className="px-3 pb-2 border-b border-[#E5E0D8] mb-2"><span className="text-sm font-bold text-[#5C5C5C] truncate block">{actionMenuEvent.title}</span></div>
                 <button onClick={() => openEditModal(actionMenuEvent)} className="flex items-center space-x-3 p-3 rounded-xl active:bg-[#F4F1EA] text-[#5C5C5C]"><Icon name="pen" className="text-[#A2B2B7] w-5 text-center" /> <span>編輯</span></button>
-                <button onClick={() => handleDeleteEvent(actionMenuEvent.id)} className="flex items-center space-x-3 p-3 rounded-xl active:bg-red-50 text-red-500"><Icon name="trash" className="w-5 text-center" /> <span>刪除</span></button>
+                <button onClick={() => handleDeleteClick(actionMenuEvent.id)} className="flex items-center space-x-3 p-3 rounded-xl active:bg-red-50 text-red-500"><Icon name="trash" className="w-5 text-center" /> <span>刪除</span></button>
               </div>
             </div>
           )}
@@ -366,10 +343,7 @@
       );
     }
 
-    // ==========================================
-    // 4. 資料庫
-    // ==========================================
-    function DatabaseTab({ folders, setFolders, files, setFiles }) {
+    function DatabaseTab({ folders, setFolders, files, setFiles, showConfirm, showToast }) {
       const [currentFolder, setCurrentFolder] = useState(null);
       const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
       const [uploadError, setUploadError] = useState('');
@@ -395,6 +369,7 @@
         const newFile = { id: 'file_' + Date.now(), folderId: targetFolderId, name: uploadData.name, type: uploadData.type, note: uploadData.note, size: uploadData.size, dataUrl: uploadData.dataUrl, createdAt: Date.now() };
         setFiles([newFile, ...files]);
         setIsUploadModalOpen(false);
+        showToast("已加入資料庫");
       };
 
       const handleDownload = (file) => {
@@ -405,8 +380,17 @@
         setActionMenuFile(null);
       };
 
-      const handleDelete = (file) => { if (!window.confirm("確定刪除檔案？")) return; setFiles(files.filter(f => f.id !== file.id)); setActionMenuFile(null); };
-      const handleDeleteFolder = (folderId) => { if (!window.confirm("確定刪除資料夾及裡面所有檔案嗎？")) return; setFolders(folders.filter(f => f.id !== folderId)); setFiles(files.filter(f => f.folderId !== folderId)); setCurrentFolder(null); };
+      const handleDeleteFileClick = (file) => {
+        showConfirm(`確定永久刪除檔案「${file.name}」嗎？`, () => {
+          setFiles(files.filter(f => f.id !== file.id)); setActionMenuFile(null);
+        });
+      };
+      
+      const handleDeleteFolderClick = (folderId) => {
+        showConfirm("確定刪除此資料夾？內含的所有檔案也會一併刪除且無法復原。", () => {
+          setFolders(folders.filter(f => f.id !== folderId)); setFiles(files.filter(f => f.folderId !== folderId)); setCurrentFolder(null);
+        });
+      };
 
       const currentFiles = files.filter(f => f.folderId === currentFolder?.id);
 
@@ -418,7 +402,7 @@
               <h2 className={`text-2xl font-bold ${theme.textDark} truncate max-w-[180px]`}>{currentFolder ? currentFolder.name : '資料庫'}</h2>
             </div>
             <div className="flex space-x-2">
-              {currentFolder && <button onClick={() => handleDeleteFolder(currentFolder.id)} className="w-10 h-10 rounded-full bg-red-50 text-red-400 flex justify-center items-center"><Icon name="trash" /></button>}
+              {currentFolder && <button onClick={() => handleDeleteFolderClick(currentFolder.id)} className="w-10 h-10 rounded-full bg-red-50 text-red-400 flex justify-center items-center"><Icon name="trash" /></button>}
               <button onClick={() => { setUploadData({ folderId: currentFolder?.id || '', newFolderName: '', name: '', note: '', dataUrl: '', type: '', size: 0 }); setIsUploadModalOpen(true); }} className={`w-10 h-10 rounded-full ${theme.primary} text-white shadow-md flex justify-center items-center`}><Icon name="plus" /></button>
             </div>
           </div>
@@ -450,7 +434,6 @@
             )}
           </div>
 
-          {/* 預覽與上傳彈窗 */}
           {previewFile && (
             <div className="fixed inset-0 bg-black/95 flex flex-col z-[300]">
               <div className="flex justify-between items-center p-4 text-white bg-gradient-to-b from-black/60 safe-pt">
@@ -496,7 +479,7 @@
               <div className={`${theme.surface} w-[90%] sm:w-80 rounded-3xl p-4 shadow-xl flex flex-col space-y-2`} onClick={e => e.stopPropagation()}>
                 <div className="pb-3 border-b border-[#E5E0D8] px-2"><h4 className="font-bold text-sm text-[#5C5C5C] truncate">{actionMenuFile.name}</h4></div>
                 <button onClick={() => handleDownload(actionMenuFile)} className="flex items-center space-x-3 p-3 rounded-xl active:bg-[#F4F1EA] text-[#5C5C5C] text-sm"><Icon name="download" className="text-[#9BA495] w-5 text-center" /> <span>下載原始檔</span></button>
-                <button onClick={() => handleDelete(actionMenuFile)} className="flex items-center space-x-3 p-3 rounded-xl active:bg-red-50 text-red-500 text-sm"><Icon name="trash" className="w-5 text-center" /> <span>永久刪除</span></button>
+                <button onClick={() => handleDeleteFileClick(actionMenuFile)} className="flex items-center space-x-3 p-3 rounded-xl active:bg-red-50 text-red-500 text-sm"><Icon name="trash" className="w-5 text-center" /> <span>永久刪除</span></button>
               </div>
             </div>
           )}
@@ -504,9 +487,6 @@
       );
     }
 
-    // ==========================================
-    // 5. 搜索頁面
-    // ==========================================
     function SearchTab({ timeline, files }) {
       const [keyword, setKeyword] = useState('');
       const results = useMemo(() => {
@@ -547,15 +527,11 @@
       );
     }
 
-    // ==========================================
-    // 6. 個人頁面
-    // ==========================================
-    function ProfileTab({ profile, setProfile, onLock }) {
+    function ProfileTab({ profile, setProfile, onLock, showConfirm, showToast }) {
       const [isEditing, setIsEditing] = useState(false);
       const [editForm, setEditForm] = useState(profile);
-      const [showPwaGuide, setShowPwaGuide] = useState(false);
       const fileInputRef = useRef(null);
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      const importInputRef = useRef(null);
 
       const handleAvatarChange = (e) => {
         const file = e.target.files[0];
@@ -577,7 +553,62 @@
         reader.readAsDataURL(file);
       };
 
-      const handleSave = () => { setProfile(editForm); setIsEditing(false); };
+      const handleSave = () => { setProfile(editForm); setIsEditing(false); showToast("個人資料已更新"); };
+
+      const handleExportBackup = async () => {
+        try {
+          const backupData = {
+            diary_account: await localforage.getItem('diary_account'),
+            diary_profile: await localforage.getItem('diary_profile'),
+            diary_timeline: await localforage.getItem('diary_timeline'),
+            diary_folders: await localforage.getItem('diary_folders'),
+            diary_files: await localforage.getItem('diary_files'),
+            backup_date: new Date().toISOString()
+          };
+          const blob = new Blob([JSON.stringify(backupData)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `手札備份_${new Date().toISOString().slice(0,10).replace(/-/g, '')}.json`;
+          a.click();
+          showToast("備份檔已成功下載！請妥善保存。");
+        } catch (e) {
+          showToast("匯出失敗，請稍後再試。");
+        }
+      };
+
+      const handleImportClick = () => {
+        showConfirm("還原備份將會「覆蓋」目前手機上所有的手札資料，確定要繼續嗎？", () => {
+          importInputRef.current?.click();
+        });
+      };
+
+      const handleImportFile = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const data = JSON.parse(event.target.result);
+            if (data.diary_account) {
+              await localforage.setItem('diary_account', data.diary_account);
+              if (data.diary_profile) await localforage.setItem('diary_profile', data.diary_profile);
+              if (data.diary_timeline) await localforage.setItem('diary_timeline', data.diary_timeline);
+              if (data.diary_folders) await localforage.setItem('diary_folders', data.diary_folders);
+              if (data.diary_files) await localforage.setItem('diary_files', data.diary_files);
+
+              showToast("資料還原成功！系統即將重新載入...");
+              setTimeout(() => window.location.reload(), 1500);
+            } else {
+              showToast("錯誤：這似乎不是有效的手札備份檔。");
+            }
+          } catch(err) {
+            showToast("備份檔解析失敗或已損毀。");
+          }
+        };
+        reader.readAsText(file);
+        e.target.value = ''; 
+      };
 
       return (
         <div className="px-4 pb-4 safe-pt flex flex-col items-center relative h-full">
@@ -607,11 +638,33 @@
           )}
 
           {!isEditing && (
-            <div className="w-full max-w-sm mt-10 space-y-3 px-4">
-              <div className="flex items-center justify-center space-x-2 text-xs text-[#9BA495] bg-[#E8F1ED] py-2 rounded-lg mb-4">
-                <Icon name="shield-check" /> <span>本機隱私模式啟用中，資料安全不外洩</span>
+            <div className="w-full max-w-sm mt-8 space-y-6 px-4">
+              <div className="flex items-center justify-center space-x-2 text-xs text-[#9BA495] bg-[#E8F1ED] py-2.5 rounded-xl shadow-sm">
+                <Icon name="shield-check" /> <span>本機隱私模式啟用中</span>
               </div>
-              <button onClick={() => window.confirm("確定登出並鎖定？") && onLock()} className="w-full flex justify-center space-x-2 p-4 mt-4 text-[#A0A0A0] text-sm font-bold"><Icon name="right-from-bracket" /> <span>鎖定手札</span></button>
+              
+              <div>
+                <h3 className={`text-xs font-bold ${theme.textLight} mb-2 ml-1`}>資料安全與管理</h3>
+                <div className={`${theme.surface} rounded-2xl border ${theme.border} overflow-hidden shadow-sm`}>
+                  <button onClick={handleExportBackup} className="w-full flex items-center justify-between p-4 active:bg-[#F4F1EA] border-b border-[#E5E0D8] transition-colors">
+                    <div className="flex items-center space-x-3 text-[#5C5C5C]">
+                      <div className="w-8 h-8 rounded-full bg-[#F4F1EA] flex items-center justify-center"><Icon name="cloud-arrow-down" className="text-[#9BA495]" /></div>
+                      <span className="text-sm font-medium">匯出備份檔</span>
+                    </div>
+                    <Icon name="chevron-right" className="text-[#D3CDC4] text-xs" />
+                  </button>
+                  <button onClick={handleImportClick} className="w-full flex items-center justify-between p-4 active:bg-[#F4F1EA] transition-colors">
+                    <div className="flex items-center space-x-3 text-[#5C5C5C]">
+                      <div className="w-8 h-8 rounded-full bg-[#F4F1EA] flex items-center justify-center"><Icon name="cloud-arrow-up" className="text-[#9BA495]" /></div>
+                      <span className="text-sm font-medium">還原備份檔</span>
+                    </div>
+                    <Icon name="chevron-right" className="text-[#D3CDC4] text-xs" />
+                  </button>
+                  <input type="file" accept=".json" ref={importInputRef} className="hidden" onChange={handleImportFile} />
+                </div>
+              </div>
+
+              <button onClick={() => showConfirm("確定要登出並鎖定手札嗎？", onLock)} className="w-full flex justify-center space-x-2 p-4 text-[#A0A0A0] text-sm font-bold active:text-[#5C5C5C] transition-colors"><Icon name="right-from-bracket" /> <span>鎖定手札</span></button>
             </div>
           )}
         </div>
