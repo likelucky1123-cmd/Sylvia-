@@ -9,7 +9,6 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="手札">
   <meta name="mobile-web-app-capable" content="yes">
-  <!-- 狀態列維持米色 -->
   <meta name="theme-color" content="#F4F1EA">
   
   <script src="https://cdn.tailwindcss.com"></script>
@@ -20,29 +19,27 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 
   <style>
-    /* 終極 iOS 版面修復：利用背景色差解決底部漏縫問題 */
-    html {
-      background-color: #F4F1EA; /* 確保頂部下拉時露出米色 */
-    }
-    body {
-      position: fixed;
-      inset: 0;
+    /* 終極版面修正：使用 fixed 鎖定全局，杜絕浮空縫隙 */
+    html, body {
+      background-color: #F4F1EA; /* 恢復米色 */
       width: 100vw;
-      height: 100%; /* 在 PWA 中 100% 比 100dvh 更穩定貼合 */
+      height: 100vh;
+      height: 100dvh; /* 優先使用動態視窗高度 */
+      margin: 0;
+      padding: 0;
       overflow: hidden;
-      background-color: #FCFAF8; /* 【關鍵】讓最底層變成白色，與導覽列融合，消除米色縫隙 */
+      position: fixed; /* 將 body 徹底鎖死在畫面邊緣 */
+      inset: 0;
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
       overscroll-behavior-y: none;
-      margin: 0;
-      padding: 0;
     }
     #root {
       width: 100%;
       height: 100%;
-      display: flex;
-      flex-direction: column;
+      position: absolute;
+      inset: 0;
     }
     input, textarea {
       -webkit-user-select: auto;
@@ -55,8 +52,6 @@
     @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     @keyframes toastInOut { 0% { transform: translate(-50%, 20px); opacity: 0; } 10% { transform: translate(-50%, 0); opacity: 1; } 90% { transform: translate(-50%, 0); opacity: 1; } 100% { transform: translate(-50%, -20px); opacity: 0; } }
     
-    /* 安全區域設定 */
-    .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
     .pt-safe { padding-top: max(1.5rem, env(safe-area-inset-top)); }
   </style>
 
@@ -237,17 +232,27 @@
       const [activeTab, setActiveTab] = useState('profile');
 
       return (
-        <div className="w-full h-full flex flex-col">
-          {/* 主內容區：強制指定米色背景 */}
-          <div className={`flex-1 overflow-y-auto relative w-full min-h-0 ${theme.bg}`}>
+        <div className="w-full h-full relative overflow-hidden">
+          
+          {/* 【關鍵修改】主內容區：絕對定位，底部邊界剛好卡在導覽列上方，確保不被遮擋也絕不產生縫隙 */}
+          <div 
+            className={`absolute top-0 left-0 w-full overflow-y-auto ${theme.bg}`}
+            style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}
+          >
             {activeTab === 'timeline' && <TimelineTab {...props} />}
             {activeTab === 'database' && <DatabaseTab {...props} />}
             {activeTab === 'search' && <SearchTab timeline={props.timeline} files={props.files} />}
             {activeTab === 'profile' && <ProfileTab {...props} />}
           </div>
           
-          {/* 底部導覽列：白色背景，加上 pb-safe 吸收安全區 */}
-          <div className={`w-full shrink-0 ${theme.surface} border-t ${theme.border} z-40 relative pb-safe`}>
+          {/* 【關鍵修改】底部導覽列：強制絕對固定 (fixed bottom-0) 於畫面最下緣 */}
+          <div 
+            className={`fixed bottom-0 left-0 w-full ${theme.surface} border-t ${theme.border} z-40`}
+            style={{ 
+              height: 'calc(64px + env(safe-area-inset-bottom, 0px))', 
+              paddingBottom: 'env(safe-area-inset-bottom, 0px)' 
+            }}
+          >
             <div className="flex justify-between items-center px-8 h-[64px]">
               <NavButton icon="clock" label="時光" active={activeTab === 'timeline'} onClick={() => setActiveTab('timeline')} />
               <NavButton icon="folder" label="資料庫" active={activeTab === 'database'} onClick={() => setActiveTab('database')} />
@@ -255,6 +260,7 @@
               <NavButton icon="circle-user" label="我的" active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
             </div>
           </div>
+
         </div>
       );
     }
