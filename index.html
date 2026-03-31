@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>莫蘭迪手札</title>
+  <title>小耳機素材庫</title>
   
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -51,14 +51,15 @@
     @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     @keyframes toastInOut { 0% { transform: translate(-50%, 20px); opacity: 0; } 10% { transform: translate(-50%, 0); opacity: 1; } 90% { transform: translate(-50%, 0); opacity: 1; } 100% { transform: translate(-50%, -20px); opacity: 0; } }
     
-    .pt-safe { padding-top: max(1.5rem, env(safe-area-inset-top)); }
+    /* 強制確保頂部預留至少 56px (3.5rem) 或系統安全區的高度，並加上 !important 防止被其他 class 覆蓋 */
+    .pt-safe { padding-top: max(3.5rem, env(safe-area-inset-top)) !important; }
   </style>
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
       const manifest = {
-        name: "莫蘭迪時光手札", 
-        short_name: "手札", 
+        name: "小耳機素材庫", 
+        short_name: "小耳機", 
         start_url: window.location.href, 
         display: "standalone",
         background_color: "#F4F1EA", 
@@ -111,8 +112,8 @@
     function Toast({ message, onClose }) {
       if (!message) return null;
       return (
-        <div className="fixed top-12 left-1/2 z-[600] animate-toast pointer-events-none">
-          <div className="bg-[#5C5C5C] text-white px-5 py-3 rounded-full shadow-lg text-sm flex items-center space-x-2">
+        <div className="fixed pt-safe left-1/2 z-[600] animate-toast pointer-events-none">
+          <div className="bg-[#5C5C5C] text-white px-5 py-3 rounded-full shadow-lg text-sm flex items-center space-x-2 mt-2">
             <Icon name="circle-info" /><span>{message}</span>
           </div>
         </div>
@@ -193,7 +194,7 @@
       };
 
       return (
-        <div className={`h-full w-full ${theme.bg} flex flex-col items-center justify-center p-6 pt-safe`}>
+        <div className={`h-full w-full ${theme.bg} flex flex-col items-center justify-center px-6 pb-6 pt-safe`}>
           <div className={`${theme.surface} w-full max-w-md rounded-3xl shadow-xl p-8 space-y-8 border ${theme.border} animate-fade-in`}>
             <div className="text-center">
               <div className="w-16 h-16 bg-[#F4F1EA] rounded-full flex items-center justify-center mx-auto mb-4">
@@ -229,16 +230,10 @@
 
     function MainApp(props) {
       const [activeTab, setActiveTab] = useState('profile');
-
-      // 【全新高度演算法】：不再單獨留一塊空白給安全區！
-      // 改用一個適中且固定的總高度 (約 76px 左右)，讓圖標在整個高度內「絕對置中」。
-      // 這樣可以確保上下留白一致，且整體看起來矮了很多、和諧很多。
       const navHeight = 'calc(56px + max(env(safe-area-inset-bottom, 0px) * 0.6, 16px))';
 
       return (
         <div className="w-full h-full relative overflow-hidden">
-          
-          {/* 主內容區：底部對齊新的緊湊導覽列高度 */}
           <div 
             className={`absolute top-0 left-0 w-full overflow-y-auto ${theme.bg}`}
             style={{ bottom: navHeight }}
@@ -249,7 +244,6 @@
             {activeTab === 'profile' && <ProfileTab {...props} />}
           </div>
           
-          {/* 底部導覽列：移除 paddingBottom，利用 flex 讓按鈕在整塊區域內完美垂直置中 */}
           <div 
             className={`fixed bottom-0 left-0 w-full ${theme.surface} border-t ${theme.border} z-40 flex justify-between items-center px-8`}
             style={{ height: navHeight }}
@@ -259,12 +253,10 @@
             <NavButton icon="magnifying-glass" label="搜索" active={activeTab === 'search'} onClick={() => setActiveTab('search')} />
             <NavButton icon="circle-user" label="我的" active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
           </div>
-
         </div>
       );
     }
 
-    // 按鈕組件也移除了 h-full，讓它根據自身內容計算高度，確保父層能精準抓到中心點
     function NavButton({ icon, label, active, onClick }) {
       return (
         <button onClick={onClick} className={`flex flex-col items-center justify-center w-14 transition-colors ${active ? 'text-[#9BA495]' : 'text-[#B8B8B8]'}`}>
@@ -461,10 +453,11 @@
 
           {previewFile && (
             <div className="fixed inset-0 bg-black/95 flex flex-col z-[300]">
-              <div className="flex justify-between items-center p-4 text-white bg-gradient-to-b from-black/60 pt-safe">
-                <button onClick={() => setPreviewFile(null)} className="p-2"><Icon name="arrow-left" className="text-xl" /></button>
+              {/* 這裡把 p-4 拆開成 px-4 pb-4 pt-safe，避免蓋掉頂部安全距離 */}
+              <div className="flex justify-between items-center px-4 pb-4 pt-safe text-white bg-gradient-to-b from-black/60">
+                <button onClick={() => setPreviewFile(null)} className="p-2 active:scale-90"><Icon name="arrow-left" className="text-xl" /></button>
                 <span className="font-medium text-sm truncate max-w-[60%]">{previewFile.name}</span>
-                <button onClick={() => handleDownload(previewFile)} className="p-2"><Icon name="download" className="text-lg" /></button>
+                <button onClick={() => handleDownload(previewFile)} className="p-2 active:scale-90"><Icon name="download" className="text-lg" /></button>
               </div>
               <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
                 {previewFile.type.startsWith('image/') && <img src={previewFile.dataUrl} className="max-w-full max-h-full object-contain" />}
