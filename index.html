@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>小耳機素材庫</title>
+  <title>莫蘭迪手札</title>
   
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -19,11 +19,21 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 
   <style>
+    /* 終極 iOS 畫面鎖定：防止任何瀏覽器原生滑動與彈跳導致的排版飄移 */
     body {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100vw;
+      height: 100dvh;
+      overflow: hidden;
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
       overscroll-behavior-y: none;
+      background-color: #F4F1EA;
     }
     input, textarea {
       -webkit-user-select: auto;
@@ -36,18 +46,16 @@
     @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     @keyframes toastInOut { 0% { transform: translate(-50%, 20px); opacity: 0; } 10% { transform: translate(-50%, 0); opacity: 1; } 90% { transform: translate(-50%, 0); opacity: 1; } 100% { transform: translate(-50%, -20px); opacity: 0; } }
     
-    /* 處理 iOS 瀏海與底線的安全區域 */
-    .safe-pt { padding-top: max(1.5rem, env(safe-area-inset-top)) !important; }
-    .safe-pb { padding-bottom: env(safe-area-inset-bottom) !important; }
+    /* 頂部安全區域（給瀏海螢幕使用） */
+    .safe-pt { padding-top: max(1.5rem, env(safe-area-inset-top)); }
   </style>
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
-      
       // ========== 桌面 App 圖標設定 ==========
       const manifest = {
-        name: "小耳機素材庫", 
-        short_name: "小耳機", 
+        name: "莫蘭迪時光手札", 
+        short_name: "手札", 
         start_url: window.location.href, 
         display: "standalone",
         background_color: "#F4F1EA", 
@@ -71,7 +79,7 @@
     });
   </script>
 </head>
-<body class="bg-[#F4F1EA] text-gray-800 antialiased h-[100dvh] w-screen overflow-hidden">
+<body class="text-gray-800 antialiased">
   <div id="root" class="h-full w-full"></div>
 
   <script type="text/babel">
@@ -102,7 +110,7 @@
     function Toast({ message, onClose }) {
       if (!message) return null;
       return (
-        <div className="fixed top-12 left-1/2 z-[600] animate-toast">
+        <div className="fixed top-12 left-1/2 z-[600] animate-toast pointer-events-none">
           <div className="bg-[#5C5C5C] text-white px-5 py-3 rounded-full shadow-lg text-sm flex items-center space-x-2">
             <Icon name="circle-info" /><span>{message}</span>
           </div>
@@ -184,7 +192,7 @@
       };
 
       return (
-        <div className={`h-full w-full ${theme.bg} flex flex-col items-center justify-center p-6 pb-20 safe-pt`}>
+        <div className={`h-full w-full ${theme.bg} flex flex-col items-center justify-center p-6 safe-pt`}>
           <div className={`${theme.surface} w-full max-w-md rounded-3xl shadow-xl p-8 space-y-8 border ${theme.border} animate-fade-in`}>
             <div className="text-center">
               <div className="w-16 h-16 bg-[#F4F1EA] rounded-full flex items-center justify-center mx-auto mb-4">
@@ -196,16 +204,16 @@
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="relative">
                 <Icon name="user" className={`absolute left-4 top-4 text-lg ${theme.textLight}`} />
-                <input type="text" placeholder="帳號" required className={`w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white border ${theme.border} focus:outline-none focus:ring-2 focus:ring-[#9BA495]`} value={username} onChange={e => setUsername(e.target.value)} />
+                <input type="text" placeholder="帳號" required className={`w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white border ${theme.border} outline-none focus:ring-2 focus:ring-[#9BA495]`} value={username} onChange={e => setUsername(e.target.value)} />
               </div>
               <div className="relative">
                 <Icon name="lock" className={`absolute left-4 top-4 text-lg ${theme.textLight}`} />
-                <input type="password" placeholder="密碼" required className={`w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white border ${theme.border} focus:outline-none focus:ring-2 focus:ring-[#9BA495]`} value={password} onChange={e => setPassword(e.target.value)} />
+                <input type="password" placeholder="密碼" required className={`w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white border ${theme.border} outline-none focus:ring-2 focus:ring-[#9BA495]`} value={password} onChange={e => setPassword(e.target.value)} />
               </div>
               {!isLoginMode && (
                 <div className="relative">
                   <Icon name="circle-check" className={`absolute left-4 top-4 text-lg ${theme.textLight}`} />
-                  <input type="password" placeholder="再次輸入密碼" required className={`w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white border ${theme.border} focus:outline-none focus:ring-2 focus:ring-[#9BA495]`} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+                  <input type="password" placeholder="再次輸入密碼" required className={`w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white border ${theme.border} outline-none focus:ring-2 focus:ring-[#9BA495]`} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
                 </div>
               )}
               {error && <p className="text-[#D1A3A3] text-sm text-center font-medium bg-[#F9ECEC] py-2 rounded-lg">{error}</p>}
@@ -222,17 +230,24 @@
       const [activeTab, setActiveTab] = useState('profile');
 
       return (
-        <div className={`h-full w-full flex flex-col ${theme.bg}`}>
-          {/* 主內容區：增加 pb-32 確保內容不會被底部導航列遮擋 */}
-          <div className="flex-1 overflow-y-auto pb-32">
+        <div className={`w-full h-full flex flex-col ${theme.bg}`}>
+          {/* 主內容區：改用 flex-1 填滿剩下空間，不再需要 padding-bottom */}
+          <div className="flex-1 overflow-y-auto relative w-full min-h-0">
             {activeTab === 'timeline' && <TimelineTab {...props} />}
             {activeTab === 'database' && <DatabaseTab {...props} />}
             {activeTab === 'search' && <SearchTab timeline={props.timeline} files={props.files} />}
             {activeTab === 'profile' && <ProfileTab {...props} />}
           </div>
           
-          {/* 底部導覽列：加入 safe-pb 讓背景貼底，內部使用固定高度 h-[64px] 完美置中 */}
-          <div className={`fixed bottom-0 left-0 w-full ${theme.surface} border-t ${theme.border} shadow-[0_-4px_20px_rgba(0,0,0,0.02)] z-40 safe-pb`}>
+          {/* 【終極解法】底部導覽列：
+            1. 不用 fixed 定位，它是 flex 容器的最後一個元素，保證沉底。
+            2. 用 inline style 強制加入 padding-bottom 吸收安全區。
+            3. 內部高度固定 64px 負責置中。
+          */}
+          <div 
+            className={`w-full shrink-0 ${theme.surface} border-t ${theme.border} shadow-[0_-4px_20px_rgba(0,0,0,0.02)] z-40 relative`}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
             <div className="flex justify-between items-center px-8 h-[64px]">
               <NavButton icon="clock" label="時光" active={activeTab === 'timeline'} onClick={() => setActiveTab('timeline')} />
               <NavButton icon="folder" label="資料庫" active={activeTab === 'database'} onClick={() => setActiveTab('database')} />
@@ -279,7 +294,7 @@
       };
 
       return (
-        <div className="px-4 pb-4 safe-pt relative min-h-full">
+        <div className="px-4 pb-6 safe-pt relative min-h-full">
           <div className="flex justify-between items-center mb-8 px-2">
             <h2 className={`text-2xl font-bold ${theme.textDark}`}>時光軌跡</h2>
             <button onClick={openAddModal} className={`w-10 h-10 rounded-full ${theme.primary} text-white shadow-md flex items-center justify-center active:scale-95`}><Icon name="plus" className="text-lg"/></button>
@@ -399,7 +414,7 @@
       const currentFiles = files.filter(f => f.folderId === currentFolder?.id);
 
       return (
-        <div className="px-4 pb-4 safe-pt h-full flex flex-col relative">
+        <div className="px-4 pb-6 safe-pt h-full flex flex-col relative">
           <div className="flex justify-between items-center mb-6 px-2">
             <div className="flex items-center space-x-3">
               {currentFolder && <button onClick={() => setCurrentFolder(null)} className="p-2"><Icon name="arrow-left" className="text-xl" /></button>}
@@ -459,16 +474,16 @@
               <div className={`${theme.surface} w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-xl space-y-4 animate-slide-up pb-8`}>
                 <h3 className={`text-lg font-bold ${theme.textDark}`}>加入本機資料庫</h3>
                 <div className="space-y-2">
-                  <select className={`w-full p-3 rounded-xl bg-white border ${theme.border} text-sm`} value={uploadData.folderId} onChange={e => setUploadData({...uploadData, folderId: e.target.value, newFolderName: ''})}><option value="">-- 建立新資料夾 --</option>{folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
-                  {!uploadData.folderId && <input type="text" placeholder="新資料夾名稱" className={`w-full p-3 rounded-xl bg-white border ${theme.border} text-sm mt-2`} value={uploadData.newFolderName} onChange={e => setUploadData({...uploadData, newFolderName: e.target.value})} />}
+                  <select className={`w-full p-3 rounded-xl bg-white border ${theme.border} text-sm outline-none`} value={uploadData.folderId} onChange={e => setUploadData({...uploadData, folderId: e.target.value, newFolderName: ''})}><option value="">-- 建立新資料夾 --</option>{folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
+                  {!uploadData.folderId && <input type="text" placeholder="新資料夾名稱" className={`w-full p-3 rounded-xl bg-white border ${theme.border} text-sm mt-2 outline-none`} value={uploadData.newFolderName} onChange={e => setUploadData({...uploadData, newFolderName: e.target.value})} />}
                 </div>
                 <div className="flex space-x-2">
                   <button onClick={() => setUploadData({...uploadData, type: 'text', dataUrl: '', name: '純文字筆記'})} className={`flex-1 py-2 text-sm rounded-lg border ${uploadData.type === 'text' ? 'bg-[#F0ECE5] border-[#9BA495] text-[#9BA495]' : 'border-[#E5E0D8] bg-white'}`}>文字</button>
                   <label className={`flex-1 py-2 text-sm text-center rounded-lg border cursor-pointer ${uploadData.type !== 'text' && uploadData.type !== '' ? 'bg-[#F0ECE5] border-[#9BA495] text-[#9BA495]' : 'border-[#E5E0D8] bg-white'}`}>媒體 <input type="file" className="hidden" onChange={handleFileChange} /></label>
                 </div>
-                {uploadData.type === 'text' ? <textarea placeholder="輸入內容..." rows="3" className={`w-full p-3 rounded-xl border ${theme.border} text-sm`} value={uploadData.dataUrl} onChange={e => setUploadData({...uploadData, dataUrl: e.target.value})} /> : uploadData.dataUrl && <div className="text-xs text-[#9BA495]"><Icon name="circle-check"/> 已選擇檔案</div>}
-                <input type="text" placeholder="檔案名稱 (含副檔名)" className={`w-full p-3 rounded-xl border ${theme.border} text-sm`} value={uploadData.name} onChange={e => setUploadData({...uploadData, name: e.target.value})} />
-                <input type="text" placeholder="加入備註..." className={`w-full p-3 rounded-xl border ${theme.border} text-sm`} value={uploadData.note} onChange={e => setUploadData({...uploadData, note: e.target.value})} />
+                {uploadData.type === 'text' ? <textarea placeholder="輸入內容..." rows="3" className={`w-full p-3 rounded-xl border ${theme.border} text-sm outline-none`} value={uploadData.dataUrl} onChange={e => setUploadData({...uploadData, dataUrl: e.target.value})} /> : uploadData.dataUrl && <div className="text-xs text-[#9BA495]"><Icon name="circle-check"/> 已選擇檔案</div>}
+                <input type="text" placeholder="檔案名稱 (含副檔名)" className={`w-full p-3 rounded-xl border ${theme.border} text-sm outline-none`} value={uploadData.name} onChange={e => setUploadData({...uploadData, name: e.target.value})} />
+                <input type="text" placeholder="加入備註..." className={`w-full p-3 rounded-xl border ${theme.border} text-sm outline-none`} value={uploadData.note} onChange={e => setUploadData({...uploadData, note: e.target.value})} />
                 {uploadError && <p className="text-red-400 text-xs text-center">{uploadError}</p>}
                 <div className="flex space-x-3 pt-2">
                   <button onClick={() => setIsUploadModalOpen(false)} className="flex-1 py-3 rounded-xl bg-[#EBEBEB] text-sm font-bold text-[#7C7C7C]">取消</button>
@@ -503,7 +518,7 @@
       }, [keyword, timeline, files]);
 
       return (
-        <div className="px-4 pb-4 safe-pt h-full flex flex-col">
+        <div className="px-4 pb-6 safe-pt h-full flex flex-col">
           <div className="px-2 mb-6">
             <h2 className={`text-2xl font-bold ${theme.textDark} mb-4`}>全域搜索</h2>
             <div className="relative">
@@ -615,7 +630,7 @@
       };
 
       return (
-        <div className="px-4 pb-4 safe-pt flex flex-col items-center relative h-full">
+        <div className="px-4 pb-6 safe-pt flex flex-col items-center relative h-full">
           <div className="w-full flex justify-end pr-2 mb-4 h-10">
             {isEditing ? <button onClick={handleSave} className={`px-4 py-1.5 rounded-full ${theme.primary} text-white text-xs font-bold mt-2`}>儲存</button>
              : <button onClick={() => { setEditForm(profile); setIsEditing(true); }} className="p-2 text-[#A0A0A0] mt-2"><Icon name="pen" /></button>}
@@ -680,3 +695,5 @@
   </script>
 </body>
 </html>
+
+
